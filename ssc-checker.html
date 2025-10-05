@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SSC Mini Browser & Score Checkerr</title>
+<title>SSC Mini Browser & Score Checkr</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body { font-family: Arial, sans-serif; margin:20px; background:#f5f5f5; }
@@ -38,11 +38,14 @@ iframe { width:100%; height:500px; border:1px solid #ccc; margin-top:20px; }
 #resultWrapper tr:nth-child(even) {
   background:#f9f9f9;
 }
+
+.correct { color: green; font-weight: bold; }
+.wrong { color: red; font-weight: bold; }
 </style>
 </head>
 <body>
 
-<h1>SSC Mini Browser & Score Checkerr</h1>
+<h1>SSC Mini Browser & Score Checkr</h1>
 
 <div style="text-align:center;">
   <p><strong>Load Local HTML File:</strong></p>
@@ -120,14 +123,23 @@ function checkScore() {
 
   if (!doc) { alert("No HTML to check."); return; }
 
-  const body = doc.body;
+  // Traverse all children in order to detect sections and questions
+  const allElements = Array.from(doc.body.querySelectorAll('*'));
+  let sections = [];
+  let currentSection = { name: "General", questions: [] };
 
-  // Detect sections by "Module" or "Section" text
-  const sectionSpans = Array.from(body.querySelectorAll('span, div'))
-      .filter(el => /module|section/i.test(el.textContent));
+  allElements.forEach(el => {
+    if (/module|section/i.test(el.textContent)) {
+      // Start new section
+      if (currentSection.questions.length > 0 || currentSection.name) sections.push(currentSection);
+      currentSection = { name: el.textContent.trim(), questions: [] };
+    } else if (el.classList.contains("question-pnl")) {
+      currentSection.questions.push(el);
+    }
+  });
+  if (currentSection.questions.length > 0 || currentSection.name) sections.push(currentSection);
 
-  if (!sectionSpans.length) sectionSpans.push({ textContent: 'General', nextElementSibling: doc.body.firstElementChild });
-
+  // --- Compute scores ---
   let grandTotal = 0;
   let output = `<table>
     <tr>
@@ -141,22 +153,11 @@ function checkScore() {
       <th>Marks</th>
     </tr>`;
 
-  sectionSpans.forEach(secEl => {
-    const secName = secEl.textContent.trim(); // Display exact section/module name
+  sections.forEach(sec => {
     let stats = { total:0, right:0, wrong:0, notAttempted:0, bonus:0, marks:0 };
-
-    // Collect all questions under this section until next section
-    let questions = [];
-    let sibling = secEl.nextElementSibling;
-    while(sibling && !(/module|section/i.test(sibling.textContent))) {
-      if(sibling.classList.contains("question-pnl")) questions.push(sibling);
-      sibling = sibling.nextElementSibling;
-    }
-
-    questions.forEach(q => {
+    sec.questions.forEach(q => {
       stats.total++;
-
-      // --- Get chosen option ---
+      // --- Chosen option ---
       let chosenText = "--";
       try {
         const tds = q.querySelectorAll(".menu-tbl td");
@@ -170,14 +171,13 @@ function checkScore() {
 
       if(chosenText === "--") stats.notAttempted++;
 
-      // --- Get correct option ---
+      // --- Correct option ---
       let correctOption = null;
       try {
         const correctTd = q.querySelector(".rightAns");
         if(correctTd) correctOption = correctTd.textContent.trim().split(".")[0];
       } catch(e){}
 
-      // --- Decide marks ---
       if(correctOption == null){
         stats.bonus++;
         stats.marks += 2;
@@ -195,7 +195,7 @@ function checkScore() {
     });
 
     output += `<tr>
-      <td>${secName}</td>
+      <td>${sec.name}</td>
       <td>${stats.total}</td>
       <td>${stats.total - stats.notAttempted}</td>
       <td>${stats.right}</td>
