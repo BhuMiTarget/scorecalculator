@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SSC Mini Browser & Score Checker</title>
+<title>SSC Mini Browser & Score Checkerr</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body { font-family: Arial, sans-serif; margin:20px; background:#f5f5f5; }
@@ -122,10 +122,11 @@ function checkScore() {
 
   const body = doc.body;
 
-  // Detect section spans containing "Module" or "Section"
-  const sectionSpans = Array.from(body.querySelectorAll('span, div')).filter(el => /module|section/i.test(el.textContent));
+  // Detect sections by "Module" or "Section" text
+  const sectionSpans = Array.from(body.querySelectorAll('span, div'))
+      .filter(el => /module|section/i.test(el.textContent));
 
-  if (!sectionSpans.length) sectionSpans.push({textContent:"General"});
+  if (!sectionSpans.length) sectionSpans.push({ textContent: 'General', nextElementSibling: doc.body.firstElementChild });
 
   let grandTotal = 0;
   let output = `<table>
@@ -141,13 +142,13 @@ function checkScore() {
     </tr>`;
 
   sectionSpans.forEach(secEl => {
-    const secName = secEl.textContent.trim();
+    const secName = secEl.textContent.trim(); // Display exact section/module name
     let stats = { total:0, right:0, wrong:0, notAttempted:0, bonus:0, marks:0 };
 
-    // Collect questions under this section
+    // Collect all questions under this section until next section
     let questions = [];
     let sibling = secEl.nextElementSibling;
-    while(sibling && !(/module|section/i.test(sibling.textContent))){
+    while(sibling && !(/module|section/i.test(sibling.textContent))) {
       if(sibling.classList.contains("question-pnl")) questions.push(sibling);
       sibling = sibling.nextElementSibling;
     }
@@ -155,33 +156,34 @@ function checkScore() {
     questions.forEach(q => {
       stats.total++;
 
-      // --- Chosen Option ---
-      let chosenOption = "--";
+      // --- Get chosen option ---
+      let chosenText = "--";
       try {
         const tds = q.querySelectorAll(".menu-tbl td");
         for(let i=0;i<tds.length;i++){
           if(tds[i].textContent.trim().toLowerCase() === "chosen option :") {
-            chosenOption = tds[i+1]?.textContent.trim() || "--";
+            chosenText = tds[i+1]?.textContent.trim() || "--";
             break;
           }
         }
       } catch(e){}
 
-      if(chosenOption === "--") stats.notAttempted++;
+      if(chosenText === "--") stats.notAttempted++;
 
-      // --- Correct Answer ---
+      // --- Get correct option ---
       let correctOption = null;
       try {
         const correctTd = q.querySelector(".rightAns");
         if(correctTd) correctOption = correctTd.textContent.trim().split(".")[0];
       } catch(e){}
 
+      // --- Decide marks ---
       if(correctOption == null){
         stats.bonus++;
         stats.marks += 2;
-      } else if(chosenOption === "--") {
+      } else if(chosenText === "--") {
         // no marks
-      } else if(chosenOption === correctOption) {
+      } else if(chosenText === correctOption) {
         stats.right++;
         stats.marks += 2;
       } else {
