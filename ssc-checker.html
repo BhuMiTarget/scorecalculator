@@ -17,23 +17,30 @@
 </head>
 <body>
 <h1>SSC Answer Key Score Checker</h1>
+
 <div style="text-align:center;">
+  <p><strong>Option 1: Load from URL (requires CORS)</strong></p>
   <input type="text" id="urlInput" size="80" placeholder="Paste SSC answer key URL here">
-  <button onclick="loadHTML()">Load Page</button>
+  <button onclick="loadHTML()">Load URL</button>
+  <br><br>
+  <p><strong>Option 2: Upload HTML file (always works)</strong></p>
+  <input type="file" id="fileInput" accept=".html">
+  <button onclick="loadFile()">Load File</button>
+  <br><br>
   <button onclick="checkScore()" id="checkBtn" disabled>Check Score</button>
 </div>
+
 <div id="result"></div>
 
 <script>
 let loadedDoc = null;
 
-// Step 1: Load URL
+// --- Step 1: Load URL ---
 async function loadHTML() {
   const url = document.getElementById("urlInput").value.trim();
   if (!url) { alert("Please enter a valid URL."); return; }
 
   try {
-    // Using a free CORS proxy
     const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
     const data = await response.json();
     const htmlText = data.contents;
@@ -48,7 +55,27 @@ async function loadHTML() {
   }
 }
 
-// Step 2: Check score
+// --- Step 1b: Load File ---
+function loadFile() {
+  const fileInput = document.getElementById('fileInput');
+  if (!fileInput.files.length) { alert('Please select an HTML file.'); return; }
+
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    const htmlText = e.target.result;
+    const parser = new DOMParser();
+    loadedDoc = parser.parseFromString(htmlText, "text/html");
+
+    alert("File loaded successfully! Click 'Check Score' to calculate your score.");
+    document.getElementById("checkBtn").disabled = false;
+  };
+
+  reader.readAsText(file);
+}
+
+// --- Step 2: Check score ---
 function checkScore() {
   if (!loadedDoc) { alert("No page loaded yet."); return; }
 
@@ -66,6 +93,10 @@ function checkScore() {
     </tr>`;
 
   const sections = loadedDoc.querySelectorAll(".section-cntnr");
+  if (!sections.length) {
+    alert("No sections found! Check your file/URL format and selectors.");
+    return;
+  }
 
   sections.forEach(section => {
     const secName = section.querySelector(".section-lbl")?.innerText.trim() || "Unnamed Section";
@@ -77,7 +108,7 @@ function checkScore() {
       let chosenText = "";
       try {
         const chosenCells = q.querySelectorAll(".menu-tbl td.bold");
-        chosenText = chosenCells[chosenCells.length - 1].textContent.trim();
+        chosenText = chosenCells[chosenCells.length - 1]?.textContent.trim() || "--";
       } catch (e) { chosenText = "--"; }
 
       if (chosenText === "--") notAttempted++;
