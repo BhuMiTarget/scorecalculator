@@ -19,8 +19,15 @@ tr:nth-child(even) { background: #f9f9f9; }
 <h1>SSC Multi-Section Score Checker</h1>
 
 <div style="text-align:center;">
+  <p><strong>Option 1: Load from URL (requires CORS)</strong></p>
+  <input type="text" id="urlInput" size="80" placeholder="Paste SSC answer key URL here">
+  <button onclick="loadURL()">Load URL</button>
+  <button onclick="downloadHTML()" id="downloadBtn" disabled>Download HTML</button>
+  <br><br>
+  <p><strong>Option 2: Upload HTML file</strong></p>
   <input type="file" id="fileInput" accept=".html">
   <button onclick="loadFile()">Load File</button>
+  <br><br>
   <button onclick="checkScore()" id="checkBtn" disabled>Check Score</button>
 </div>
 
@@ -28,7 +35,40 @@ tr:nth-child(even) { background: #f9f9f9; }
 
 <script>
 let loadedDoc = null;
+let loadedHTMLText = "";
 
+// --- Load via URL ---
+async function loadURL() {
+  const url = document.getElementById("urlInput").value.trim();
+  if (!url) { alert("Please enter a valid URL."); return; }
+
+  try {
+    const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+    const data = await response.json();
+    loadedHTMLText = data.contents;
+
+    const parser = new DOMParser();
+    loadedDoc = parser.parseFromString(loadedHTMLText, "text/html");
+
+    alert("Page loaded successfully! You can now check the score or download the HTML.");
+    document.getElementById("checkBtn").disabled = false;
+    document.getElementById("downloadBtn").disabled = false;
+  } catch (err) {
+    alert("Error loading page. Likely due to CORS restrictions: " + err);
+  }
+}
+
+// --- Download loaded HTML ---
+function downloadHTML() {
+  if (!loadedHTMLText) { alert("No HTML loaded yet."); return; }
+  const blob = new Blob([loadedHTMLText], {type: "text/html"});
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "ssc_page.html";
+  link.click();
+}
+
+// --- Load via File ---
 function loadFile() {
   const fileInput = document.getElementById('fileInput');
   if (!fileInput.files.length) { alert('Please select an HTML file.'); return; }
@@ -37,24 +77,23 @@ function loadFile() {
   const reader = new FileReader();
 
   reader.onload = function(e) {
-    const htmlText = e.target.result;
+    loadedHTMLText = e.target.result;
     const parser = new DOMParser();
-    loadedDoc = parser.parseFromString(htmlText, "text/html");
+    loadedDoc = parser.parseFromString(loadedHTMLText, "text/html");
 
-    alert("File loaded successfully! Click 'Check Score' to calculate your score.");
+    alert("File loaded successfully! You can now check the score.");
     document.getElementById("checkBtn").disabled = false;
   };
 
   reader.readAsText(file);
 }
 
+// --- Check Score ---
 function checkScore() {
-  if (!loadedDoc) { alert("No file loaded yet."); return; }
+  if (!loadedDoc) { alert("No HTML loaded yet."); return; }
 
-  // Find all section labels and question panels in order
-  const container = loadedDoc.body;
-  const children = Array.from(container.querySelectorAll(".section-lbl, .question-pnl"));
-  
+  // Get all section labels and question panels in order
+  const children = Array.from(loadedDoc.querySelectorAll(".section-lbl, .question-pnl"));
   if (!children.length) { alert("No sections or questions found!"); return; }
 
   let grandTotal = 0;
@@ -76,12 +115,9 @@ function checkScore() {
   children.forEach(el => {
     if (el.classList.contains("section-lbl")) {
       currentSection = el.innerText.trim();
-      if (!sectionStats[currentSection]) {
-        sectionStats[currentSection] = { total: 0, right: 0, wrong: 0, notAttempted: 0, bonus: 0, marks: 0 };
-      }
-    }
-    else if (el.classList.contains("question-pnl")) {
-      if (!sectionStats[currentSection]) sectionStats[currentSection] = { total: 0, right: 0, wrong: 0, notAttempted: 0, bonus: 0, marks: 0 };
+      if (!sectionStats[currentSection]) sectionStats[currentSection] = { total:0, right:0, wrong:0, notAttempted:0, bonus:0, marks:0 };
+    } else if (el.classList.contains("question-pnl")) {
+      if (!sectionStats[currentSection]) sectionStats[currentSection] = { total:0, right:0, wrong:0, notAttempted:0, bonus:0, marks:0 };
       const stats = sectionStats[currentSection];
       stats.total++;
 
@@ -115,11 +151,11 @@ function checkScore() {
         stats.wrong++;
         stats.marks -= 0.5;
       }
-      grandTotal += stats.marks; // update grand total cumulatively
+      grandTotal += stats.marks;
     }
   });
 
-  // Build table output
+  // Build table
   for (let sec in sectionStats) {
     const s = sectionStats[sec];
     output += `<tr>
