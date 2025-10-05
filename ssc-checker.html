@@ -2,217 +2,71 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SSC Mini Browser & Score Checkr</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key Score Checker</title>
 <style>
-body { font-family: Arial, sans-serif; margin:20px; background:#f5f5f5; }
-h1 { text-align:center; color:#333; }
-input, button { padding:6px 10px; margin:4px; }
-iframe { width:100%; height:500px; border:1px solid #ccc; margin-top:20px; }
-
-#resultWrapper {
-  overflow-x: auto;
-  width: 100%;
-  margin-top:20px;
-}
-
-#resultWrapper table {
-  border-collapse: collapse;
-  min-width: 600px;
-  width: 100%;
-  background:#fff;
-}
-
-#resultWrapper th, #resultWrapper td {
-  border:1px solid #ccc;
-  padding:8px;
-  text-align:center;
-  white-space: nowrap;
-}
-
-#resultWrapper th {
-  background:#2c7be5;
-  color:#fff;
-}
-
-#resultWrapper tr:nth-child(even) {
-  background:#f9f9f9;
-}
-
-.correct { color: green; font-weight: bold; }
-.wrong { color: red; font-weight: bold; }
+    body { font-family: Arial, sans-serif; padding: 20px; background:#f5f5f5; }
+    h1 { text-align:center; }
+    #scoreBoard { margin-top: 20px; padding: 15px; background: #fff; border-radius: 10px; box-shadow: 0 0 10px #ccc; }
+    .section { margin-bottom: 10px; }
+    button { padding: 10px 20px; font-size: 1em; cursor: pointer; }
 </style>
 </head>
 <body>
 
-<h1>SSC Mini Browser & Score Checkr</h1>
+<h1>Answer Key Score Checker</h1>
 
-<div style="text-align:center;">
-  <p><strong>Load Local HTML File:</strong></p>
-  <input type="file" id="fileInput" accept=".html">
-  <button onclick="loadLocalFile()">Load File</button>
-  <br><br>
-  <p><strong>Load URL (may fail due to CORS):</strong></p>
-  <input type="text" id="urlInput" size="60" placeholder="Enter URL">
-  <button onclick="loadURL()">Load URL</button>
-  <button onclick="downloadHTML()" id="downloadBtn" disabled>Download HTML</button>
-  <br><br>
-  <button onclick="checkScore()" id="checkBtn" disabled>Check Score</button>
+<p>Enter answers in the textboxes below (e.g., A, B, C, D). Leave blank if not attempted.</p>
+
+<div id="questionsContainer">
+    <!-- Example Questions (can be repeated dynamically) -->
+    <div class="question-pnl" data-section="Math">
+        Q1: <input type="text" class="answer" data-correct="A">
+    </div>
+    <div class="question-pnl" data-section="Math">
+        Q2: <input type="text" class="answer" data-correct="B">
+    </div>
+    <div class="question-pnl" data-section="English">
+        Q3: <input type="text" class="answer" data-correct="C">
+    </div>
+    <div class="question-pnl" data-section="English">
+        Q4: <input type="text" class="answer" data-correct="D">
+    </div>
 </div>
 
-<iframe id="browserFrame"></iframe>
+<button id="checkScoreBtn">Check Score</button>
 
-<div id="resultWrapper">
-  <div id="result"></div>
-</div>
+<div id="scoreBoard"></div>
 
 <script>
-let loadedHTMLText = "";
-const iframe = document.getElementById('browserFrame');
+document.getElementById("checkScoreBtn").addEventListener("click", function() {
+    const allQuestions = document.querySelectorAll(".question-pnl");
+    let totalMarks = 0;
+    let sectionMarks = {};
 
-// --- Load local file ---
-function loadLocalFile() {
-  const fileInput = document.getElementById('fileInput');
-  if (!fileInput.files.length) { alert('Please select a file'); return; }
+    allQuestions.forEach(q => {
+        const userAnswer = q.querySelector(".answer").value.trim().toUpperCase();
+        const correctAnswer = q.querySelector(".answer").dataset.correct;
+        const section = q.dataset.section || "General";
 
-  const file = fileInput.files[0];
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    loadedHTMLText = e.target.result;
-    iframe.srcdoc = loadedHTMLText;
-    alert("File loaded in mini browser.");
-    document.getElementById("checkBtn").disabled = false;
-    document.getElementById("downloadBtn").disabled = false;
-  };
-  reader.readAsText(file);
-}
-
-// --- Load URL ---
-function loadURL() {
-  const url = document.getElementById("urlInput").value.trim();
-  if (!url) { alert("Please enter a URL"); return; }
-  iframe.src = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-  alert("URL loaded in iframe. Click 'Check Score' after page loads.");
-  document.getElementById("checkBtn").disabled = false;
-}
-
-// --- Download HTML ---
-function downloadHTML() {
-  if (!loadedHTMLText) { alert("No HTML loaded yet."); return; }
-  const blob = new Blob([loadedHTMLText], {type: "text/html"});
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "ssc_page.html";
-  link.click();
-}
-
-// --- Check Score ---
-function checkScore() {
-  let doc = null;
-  if (loadedHTMLText) {
-    const parser = new DOMParser();
-    doc = parser.parseFromString(loadedHTMLText, "text/html");
-  } else {
-    try {
-      doc = iframe.contentDocument || iframe.contentWindow.document;
-    } catch(e) {
-      alert("Cannot access iframe content due to cross-origin restrictions. Use local file instead.");
-      return;
-    }
-  }
-
-  if (!doc) { alert("No HTML to check."); return; }
-
-  // Traverse all children in order to detect sections and questions
-  const allElements = Array.from(doc.body.querySelectorAll('*'));
-  let sections = [];
-  let currentSection = { name: "General", questions: [] };
-
-  allElements.forEach(el => {
-    if (/module|section/i.test(el.textContent)) {
-      // Start new section
-      if (currentSection.questions.length > 0 || currentSection.name) sections.push(currentSection);
-      currentSection = { name: el.textContent.trim(), questions: [] };
-    } else if (el.classList.contains("question-pnl")) {
-      currentSection.questions.push(el);
-    }
-  });
-  if (currentSection.questions.length > 0 || currentSection.name) sections.push(currentSection);
-
-  // --- Compute scores ---
-  let grandTotal = 0;
-  let output = `<table>
-    <tr>
-      <th>Section</th>
-      <th>Total Qs</th>
-      <th>Attempted</th>
-      <th>Right</th>
-      <th>Wrong</th>
-      <th>Not Attempted</th>
-      <th>Bonus</th>
-      <th>Marks</th>
-    </tr>`;
-
-  sections.forEach(sec => {
-    let stats = { total:0, right:0, wrong:0, notAttempted:0, bonus:0, marks:0 };
-    sec.questions.forEach(q => {
-      stats.total++;
-      // --- Chosen option ---
-      let chosenText = "--";
-      try {
-        const tds = q.querySelectorAll(".menu-tbl td");
-        for(let i=0;i<tds.length;i++){
-          if(tds[i].textContent.trim().toLowerCase() === "chosen option :") {
-            chosenText = tds[i+1]?.textContent.trim() || "--";
-            break;
-          }
+        if(userAnswer === correctAnswer) {
+            totalMarks++;
+            sectionMarks[section] = (sectionMarks[section] || 0) + 1;
+        } else {
+            sectionMarks[section] = sectionMarks[section] || 0;
         }
-      } catch(e){}
-
-      if(chosenText === "--") stats.notAttempted++;
-
-      // --- Correct option ---
-      let correctOption = null;
-      try {
-        const correctTd = q.querySelector(".rightAns");
-        if(correctTd) correctOption = correctTd.textContent.trim().split(".")[0];
-      } catch(e){}
-
-      if(correctOption == null){
-        stats.bonus++;
-        stats.marks += 2;
-      } else if(chosenText === "--") {
-        // no marks
-      } else if(chosenText === correctOption) {
-        stats.right++;
-        stats.marks += 2;
-      } else {
-        stats.wrong++;
-        stats.marks -= 0.5;
-      }
-
-      grandTotal += stats.marks;
     });
 
-    output += `<tr>
-      <td>${sec.name}</td>
-      <td>${stats.total}</td>
-      <td>${stats.total - stats.notAttempted}</td>
-      <td>${stats.right}</td>
-      <td>${stats.wrong}</td>
-      <td>${stats.notAttempted}</td>
-      <td>${stats.bonus}</td>
-      <td style="color:${stats.marks<0?'red':'black'}">${stats.marks.toFixed(2)}</td>
-    </tr>`;
-  });
+    // Display results silently
+    let resultHTML = `<h2>Total Score: ${totalMarks} / ${allQuestions.length}</h2>`;
+    resultHTML += `<h3>Section-wise Scores:</h3>`;
+    for (const sec in sectionMarks) {
+        const totalInSection = Array.from(allQuestions).filter(q => q.dataset.section === sec).length;
+        resultHTML += `<div class="section">${sec}: ${sectionMarks[sec]} / ${totalInSection}</div>`;
+    }
 
-  output += `<tr style="font-weight:bold; background:#e7f5fe;">
-      <td colspan="7">Grand Total</td>
-      <td>${grandTotal.toFixed(2)}</td>
-    </tr></table>`;
-
-  document.getElementById("result").innerHTML = output;
-}
+    document.getElementById("scoreBoard").innerHTML = resultHTML;
+});
 </script>
 
 </body>
