@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Key Checker</title>
+<style>
+body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; }
+input, button { padding: 6px 12px; margin: 5px; }
+#scoreBoard { display:none; margin-top: 15px; background:#fff; padding:15px; border-radius:8px; box-shadow:0 0 8px rgba(0,0,0,0.1);}
+.section { font-weight:bold; margin-bottom:5px; }
+</style>
+</head>
+<body>
+
+<h2>Answer Key Checker</h2>
+<input type="text" id="urlInput" placeholder="Paste test URL here" size="50">
+<button onclick="loadTest()">Load Test</button>
+<button onclick="checkScore()">Check Score</button>
+<button id="downloadBtn" onclick="downloadScore()" style="display:none;">Download HTML</button>
+
+<iframe id="testFrame" style="width:100%; height:400px; border:1px solid #ccc; margin-top:10px;"></iframe>
+
+<div id="scoreBoard"></div>
+
+<script>
+// ===== Load test in iframe =====
+function loadTest(){
+    const url = document.getElementById("urlInput").value.trim();
+    if(url){
+        document.getElementById("testFrame").src = url;
+    }
+}
+
+// ===== Dynamically detect sections and compute scores =====
+function checkScore(){
+    const iframe = document.getElementById("testFrame");
+    let doc;
+    try{
+        doc = iframe.contentDocument || iframe.contentWindow.document;
+    }catch(e){
+        alert("Cannot access iframe content! Make sure it is hosted on the same domain (GitHub Pages recommended).");
+        return;
+    }
+
+    const questions = Array.from(doc.getElementsByClassName("question-pnl"));
+    if(!questions.length){ alert("No questions found in the test page!"); return; }
+
+    // Detect section headers dynamically
+    const sectionElements = Array.from(doc.querySelectorAll(".question-section, .section-title, h2, h3"));
+    let sections = [];
+    if(sectionElements.length){
+        for(let i=0;i<sectionElements.length;i++){
+            const secName = sectionElements[i].textContent.trim() || `Section ${i+1}`;
+            let startIndex = questions.findIndex(q => q.compareDocumentPosition(sectionElements[i]) & Node.DOCUMENT_POSITION_PRECEDING ? false : true);
+            sections.push({name:secName, start:startIndex});
+        }
+    } else {
+        sections.push({name:"Section 1", start:0});
+    }
+
+    // Set end index for each section
+    for(let i=0;i<sections.length;i++){
+        sections[i].end = (i<sections.length-1)? sections[i+1].start : questions.length;
+    }
+
+    let scoreHTML = "", totalScore=0;
+
+    sections.forEach(sec=>{
+        let secScore=0;
+        for(let i=sec.start;i<sec.end;i++){
+            const userAnsElem = questions[i].querySelector(".bold:nth-child(6)"); // adjust if needed
+            const userAns = userAnsElem?.textContent.trim();
+            const correctAns = questions[i].getAttribute("data-correct") || userAns; // You can embed correct answer in HTML
+            if(userAns && userAns === correctAns) secScore++;
+        }
+        totalScore += secScore;
+        scoreHTML += `<div class="section">${sec.name}: ${secScore} / ${sec.end - sec.start}</div>`;
+    });
+
+    scoreHTML += `<div class="section" style="font-size:1.2em; margin-top:10px;">Total: ${totalScore} / ${questions.length}</div>`;
+
+    const board = document.getElementById("scoreBoard");
+    board.innerHTML = scoreHTML;
+    board.style.display="block";
+    document.getElementById("downloadBtn").style.display="inline-block";
+}
+
+// ===== Download score as HTML =====
+function downloadScore(){
+    const content = document.getElementById("scoreBoard").innerHTML;
+    const blob = new Blob([`<html><body>${content}</body></html>`], {type:"text/html"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "score.html";
+    a.click();
+    URL.revokeObjectURL(url);
+}
+</script>
+
+</body>
+</html>
