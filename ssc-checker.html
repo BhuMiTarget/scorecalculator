@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SSC Answer Key Score Checker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+  h1 { text-align: center; color: #333; }
+  input, button { padding: 8px; margin: 5px; }
+  table { border-collapse: collapse; margin: 20px auto; width: 95%; max-width: 800px; background: #fff; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+  th { background: #2c7be5; color: #fff; }
+  tr:nth-child(even) { background: #f9f9f9; }
+  #result { margin-top: 20px; }
+</style>
+</head>
+<body>
+  <h1>SSC Answer Key Score Checker</h1>
+  <div style="text-align:center;">
+    <input type="text" id="urlInput" size="80" placeholder="Paste SSC answer key URL here">
+    <button onclick="fetchAndCheck()">Check Score</button>
+  </div>
+  <div id="result"></div>
+
+<script>
+async function fetchAndCheck() {
+  const url = document.getElementById("urlInput").value.trim();
+  if (!url) {
+    alert("Please enter a valid URL.");
+    return;
+  }
+
+  try {
+    const response = await fetch(url);
+    const htmlText = await response.text();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, "text/html");
+
+    calculateScores(doc);
+  } catch (err) {
+    alert("Error loading page: " + err);
+  }
+}
+
+function calculateScores(doc) {
+  let grandTotal = 0;
+  let output = `
+    <table>
+      <tr>
+        <th>Section</th>
+        <th>Total Qs</th>
+        <th>Attempted</th>
+        <th>Right</th>
+        <th>Wrong</th>
+        <th>Not Attempted</th>
+        <th>Bonus</th>
+        <th>Marks</th>
+      </tr>
+  `;
+
+  const sections = doc.querySelectorAll(".section-cntnr");
+
+  sections.forEach(section => {
+    const secName = section.querySelector(".section-lbl")?.innerText.trim() || "Unnamed Section";
+    const questions = section.querySelectorAll(".question-pnl");
+
+    let right = 0, wrong = 0, notAttempted = 0, bonus = 0, totalMarks = 0;
+
+    questions.forEach(q => {
+      let chosenText = "";
+      try {
+        const chosenCells = q.querySelectorAll(".menu-tbl td.bold");
+        chosenText = chosenCells[chosenCells.length - 1].textContent.trim();
+      } catch (e) {
+        chosenText = "--";
+      }
+
+      if (chosenText === "--") notAttempted++;
+
+      let correctOption = null;
+      try {
+        const correctTd = q.querySelector(".rightAns");
+        if (correctTd) {
+          correctOption = correctTd.textContent.trim().split(".")[0];
+        }
+      } catch (e) {}
+
+      if (correctOption == null) {
+        bonus++;
+        totalMarks += 2;
+      } else if (chosenText === "--") {
+        // no marks
+      } else if (chosenText === correctOption) {
+        right++;
+        totalMarks += 2;
+      } else {
+        wrong++;
+        totalMarks -= 0.5;
+      }
+    });
+
+    grandTotal += totalMarks;
+
+    output += `
+      <tr>
+        <td>${secName}</td>
+        <td>${questions.length}</td>
+        <td>${questions.length - notAttempted}</td>
+        <td>${right}</td>
+        <td>${wrong}</td>
+        <td>${notAttempted}</td>
+        <td>${bonus}</td>
+        <td>${totalMarks.toFixed(2)}</td>
+      </tr>
+    `;
+  });
+
+  output += `
+      <tr style="font-weight:bold; background:#e7f5fe;">
+        <td colspan="7">Grand Total</td>
+        <td>${grandTotal.toFixed(2)}</td>
+      </tr>
+    </table>
+  `;
+
+  document.getElementById("result").innerHTML = output;
+}
+</script>
+</body>
+</html>
