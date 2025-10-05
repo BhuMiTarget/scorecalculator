@@ -16,13 +16,13 @@
 </style>
 </head>
 <body>
-  <h1>SSC Answer Key Score Checker</h1>
-  <div style="text-align:center;">
-    <input type="text" id="urlInput" size="80" placeholder="Paste SSC answer key URL here">
-    <button onclick="loadHTML()">Load Page</button>
-    <button onclick="checkScore()" id="checkBtn" disabled>Check Score</button>
-  </div>
-  <div id="result"></div>
+<h1>SSC Answer Key Score Checker</h1>
+<div style="text-align:center;">
+  <input type="text" id="urlInput" size="80" placeholder="Paste SSC answer key URL here">
+  <button onclick="loadHTML()">Load Page</button>
+  <button onclick="checkScore()" id="checkBtn" disabled>Check Score</button>
+</div>
+<div id="result"></div>
 
 <script>
 let loadedDoc = null;
@@ -30,49 +30,40 @@ let loadedDoc = null;
 // Step 1: Load URL
 async function loadHTML() {
   const url = document.getElementById("urlInput").value.trim();
-  if (!url) {
-    alert("Please enter a valid URL.");
-    return;
-  }
+  if (!url) { alert("Please enter a valid URL."); return; }
 
   try {
-    // Using CORS proxy
+    // Using a free CORS proxy
     const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
     const data = await response.json();
     const htmlText = data.contents;
 
     const parser = new DOMParser();
     loadedDoc = parser.parseFromString(htmlText, "text/html");
-    
+
     alert("Page loaded successfully! Click 'Check Score' to calculate your score.");
     document.getElementById("checkBtn").disabled = false;
-
   } catch (err) {
-    alert("Error loading page: " + err);
+    alert("Error loading page. Likely due to CORS restrictions: " + err);
   }
 }
 
 // Step 2: Check score
 function checkScore() {
-  if (!loadedDoc) {
-    alert("No page loaded yet.");
-    return;
-  }
+  if (!loadedDoc) { alert("No page loaded yet."); return; }
 
   let grandTotal = 0;
-  let output = `
-    <table>
-      <tr>
-        <th>Section</th>
-        <th>Total Qs</th>
-        <th>Attempted</th>
-        <th>Right</th>
-        <th>Wrong</th>
-        <th>Not Attempted</th>
-        <th>Bonus</th>
-        <th>Marks</th>
-      </tr>
-  `;
+  let output = `<table>
+    <tr>
+      <th>Section</th>
+      <th>Total Qs</th>
+      <th>Attempted</th>
+      <th>Right</th>
+      <th>Wrong</th>
+      <th>Not Attempted</th>
+      <th>Bonus</th>
+      <th>Marks</th>
+    </tr>`;
 
   const sections = loadedDoc.querySelectorAll(".section-cntnr");
 
@@ -87,18 +78,14 @@ function checkScore() {
       try {
         const chosenCells = q.querySelectorAll(".menu-tbl td.bold");
         chosenText = chosenCells[chosenCells.length - 1].textContent.trim();
-      } catch (e) {
-        chosenText = "--";
-      }
+      } catch (e) { chosenText = "--"; }
 
       if (chosenText === "--") notAttempted++;
 
       let correctOption = null;
       try {
         const correctTd = q.querySelector(".rightAns");
-        if (correctTd) {
-          correctOption = correctTd.textContent.trim().split(".")[0];
-        }
+        if (correctTd) correctOption = correctTd.textContent.trim().split(".")[0];
       } catch (e) {}
 
       if (correctOption == null) {
@@ -117,27 +104,22 @@ function checkScore() {
 
     grandTotal += totalMarks;
 
-    output += `
-      <tr>
-        <td>${secName}</td>
-        <td>${questions.length}</td>
-        <td>${questions.length - notAttempted}</td>
-        <td>${right}</td>
-        <td>${wrong}</td>
-        <td>${notAttempted}</td>
-        <td>${bonus}</td>
-        <td style="color:${totalMarks < 0 ? 'red':'black'}">${totalMarks.toFixed(2)}</td>
-      </tr>
-    `;
+    output += `<tr>
+      <td>${secName}</td>
+      <td>${questions.length}</td>
+      <td>${questions.length - notAttempted}</td>
+      <td>${right}</td>
+      <td>${wrong}</td>
+      <td>${notAttempted}</td>
+      <td>${bonus}</td>
+      <td style="color:${totalMarks < 0 ? 'red':'black'}">${totalMarks.toFixed(2)}</td>
+    </tr>`;
   });
 
-  output += `
-      <tr style="font-weight:bold; background:#e7f5fe;">
-        <td colspan="7">Grand Total</td>
-        <td>${grandTotal.toFixed(2)}</td>
-      </tr>
-    </table>
-  `;
+  output += `<tr style="font-weight:bold; background:#e7f5fe;">
+      <td colspan="7">Grand Total</td>
+      <td>${grandTotal.toFixed(2)}</td>
+    </tr></table>`;
 
   document.getElementById("result").innerHTML = output;
 }
