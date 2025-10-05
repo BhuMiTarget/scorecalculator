@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SSC Multi-Section Score Checker</title>
+<title>SSC Score Checker - Hybrid Detection</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
@@ -16,7 +16,7 @@ tr:nth-child(even) { background: #f9f9f9; }
 </style>
 </head>
 <body>
-<h1>SSC Multi-Section Score Checker</h1>
+<h1>SSC Score Checker - Hybrid Detection</h1>
 
 <div style="text-align:center;">
   <p><strong>Option 1: Load from URL (requires CORS)</strong></p>
@@ -88,13 +88,19 @@ function loadFile() {
   reader.readAsText(file);
 }
 
-// --- Check Score ---
+// --- Hybrid auto-detect and check score ---
 function checkScore() {
   if (!loadedDoc) { alert("No HTML loaded yet."); return; }
 
-  // Get all section labels and question panels in order
-  const children = Array.from(loadedDoc.querySelectorAll(".section-lbl, .question-pnl"));
-  if (!children.length) { alert("No sections or questions found!"); return; }
+  const body = loadedDoc.body;
+
+  // Detect sections: any div or span containing module/section/part keywords
+  let sectionElements = Array.from(body.querySelectorAll('div, span')).filter(el => {
+    return /module|section|part/i.test(el.innerText);
+  });
+
+  // If no sections found, use default
+  if (!sectionElements.length) sectionElements = [{innerText:"General"}];
 
   let grandTotal = 0;
   let output = `<table>
@@ -109,37 +115,47 @@ function checkScore() {
       <th>Marks</th>
     </tr>`;
 
-  let currentSection = "General";
-  let sectionStats = {};
+  sectionElements.forEach(secEl => {
+    const secName = secEl.innerText.trim();
+    let stats = { total:0, right:0, wrong:0, notAttempted:0, bonus:0, marks:0 };
 
-  children.forEach(el => {
-    if (el.classList.contains("section-lbl")) {
-      currentSection = el.innerText.trim();
-      if (!sectionStats[currentSection]) sectionStats[currentSection] = { total:0, right:0, wrong:0, notAttempted:0, bonus:0, marks:0 };
-    } else if (el.classList.contains("question-pnl")) {
-      if (!sectionStats[currentSection]) sectionStats[currentSection] = { total:0, right:0, wrong:0, notAttempted:0, bonus:0, marks:0 };
-      const stats = sectionStats[currentSection];
+    // Collect questions until next section
+    let questions = [];
+    let sibling = secEl.nextElementSibling;
+    while(sibling && !/module|section|part/i.test(sibling.innerText)){
+      if (sibling.classList.contains("question-pnl")) questions.push(sibling);
+      sibling = sibling.nextElementSibling;
+    }
+
+    questions.forEach(q => {
       stats.total++;
 
-      // Chosen option
+      // Chosen option detection: strict using "Chosen Option :"
       let chosenOption = "--";
       try {
-        const tds = el.querySelectorAll(".menu-tbl td.bold");
-        tds.forEach((td,i)=>{
-          if(tds[i-1]?.textContent.trim()==="Chosen Option :") chosenOption = td.textContent.trim();
-        });
+        const tds = q.querySelectorAll(".menu-tbl td");
+        for(let i=0;i<tds.length;i++){
+          if(tds[i].textContent.trim().toLowerCase() === "chosen option :") {
+            chosenOption = tds[i+1]?.textContent.trim() || "--";
+            break;
+          }
+        }
       } catch(e){}
 
       if(chosenOption === "--") stats.notAttempted++;
 
-      // Correct answer
+      // Correct answer detection
       let correctOption = null;
       try {
-        const correctTd = el.querySelector(".rightAns");
+        const correctTd = q.querySelector(".rightAns");
         if(correctTd) correctOption = correctTd.textContent.trim().split(".")[0];
+        else {
+          const imgTick = q.querySelector("img[src*='tick']");
+          if(imgTick) correctOption = imgTick.parentElement.textContent.trim().split(".")[0];
+        }
       } catch(e){}
 
-      if(correctOption==null){
+      if(correctOption == null){
         stats.bonus++;
         stats.marks += 2;
       } else if(chosenOption === "--") {
@@ -151,24 +167,21 @@ function checkScore() {
         stats.wrong++;
         stats.marks -= 0.5;
       }
-      grandTotal += stats.marks;
-    }
-  });
 
-  // Build table
-  for (let sec in sectionStats) {
-    const s = sectionStats[sec];
+      grandTotal += stats.marks;
+    });
+
     output += `<tr>
-      <td>${sec}</td>
-      <td>${s.total}</td>
-      <td>${s.total - s.notAttempted}</td>
-      <td>${s.right}</td>
-      <td>${s.wrong}</td>
-      <td>${s.notAttempted}</td>
-      <td>${s.bonus}</td>
-      <td style="color:${s.marks<0?'red':'black'}">${s.marks.toFixed(2)}</td>
+      <td>${secName}</td>
+      <td>${stats.total}</td>
+      <td>${stats.total - stats.notAttempted}</td>
+      <td>${stats.right}</td>
+      <td>${stats.wrong}</td>
+      <td>${stats.notAttempted}</td>
+      <td>${stats.bonus}</td>
+      <td style="color:${stats.marks<0?'red':'black'}">${stats.marks.toFixed(2)}</td>
     </tr>`;
-  }
+  });
 
   output += `<tr style="font-weight:bold; background:#e7f5fe;">
       <td colspan="7">Grand Total</td>
