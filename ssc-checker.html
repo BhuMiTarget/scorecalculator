@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SSC Score Checker - Hybrid Detection</title>
+<title>SSC Score Checker</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
@@ -16,7 +16,7 @@ tr:nth-child(even) { background: #f9f9f9; }
 </style>
 </head>
 <body>
-<h1>SSC Score Checker - Hybrid Detection</h1>
+<h1>SSC Score Checker</h1>
 
 <div style="text-align:center;">
   <p><strong>Option 1: Load from URL (requires CORS)</strong></p>
@@ -37,7 +37,7 @@ tr:nth-child(even) { background: #f9f9f9; }
 let loadedDoc = null;
 let loadedHTMLText = "";
 
-// --- Load via URL ---
+// --- Load URL ---
 async function loadURL() {
   const url = document.getElementById("urlInput").value.trim();
   if (!url) { alert("Please enter a valid URL."); return; }
@@ -50,25 +50,15 @@ async function loadURL() {
     const parser = new DOMParser();
     loadedDoc = parser.parseFromString(loadedHTMLText, "text/html");
 
-    alert("Page loaded successfully! You can now check the score or download the HTML.");
+    alert("Page loaded successfully!");
     document.getElementById("checkBtn").disabled = false;
     document.getElementById("downloadBtn").disabled = false;
   } catch (err) {
-    alert("Error loading page. Likely due to CORS restrictions: " + err);
+    alert("Error loading page: " + err);
   }
 }
 
-// --- Download loaded HTML ---
-function downloadHTML() {
-  if (!loadedHTMLText) { alert("No HTML loaded yet."); return; }
-  const blob = new Blob([loadedHTMLText], {type: "text/html"});
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "ssc_page.html";
-  link.click();
-}
-
-// --- Load via File ---
+// --- Load File ---
 function loadFile() {
   const fileInput = document.getElementById('fileInput');
   if (!fileInput.files.length) { alert('Please select an HTML file.'); return; }
@@ -81,26 +71,34 @@ function loadFile() {
     const parser = new DOMParser();
     loadedDoc = parser.parseFromString(loadedHTMLText, "text/html");
 
-    alert("File loaded successfully! You can now check the score.");
+    alert("File loaded successfully!");
     document.getElementById("checkBtn").disabled = false;
   };
 
   reader.readAsText(file);
 }
 
-// --- Hybrid auto-detect and check score ---
+// --- Download HTML ---
+function downloadHTML() {
+  if (!loadedHTMLText) { alert("No HTML loaded yet."); return; }
+  const blob = new Blob([loadedHTMLText], {type: "text/html"});
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "ssc_page.html";
+  link.click();
+}
+
+// --- Check Score ---
 function checkScore() {
   if (!loadedDoc) { alert("No HTML loaded yet."); return; }
 
   const body = loadedDoc.body;
 
-  // Detect sections: any div or span containing module/section/part keywords
-  let sectionElements = Array.from(body.querySelectorAll('div, span')).filter(el => {
-    return /module|section|part/i.test(el.innerText);
-  });
+  // Detect section spans containing "Module" or "Section"
+  const sectionSpans = Array.from(body.querySelectorAll('span, div')).filter(el => /module|section/i.test(el.textContent));
 
-  // If no sections found, use default
-  if (!sectionElements.length) sectionElements = [{innerText:"General"}];
+  // Default section if none found
+  if (!sectionSpans.length) sectionSpans.push({textContent:"General"});
 
   let grandTotal = 0;
   let output = `<table>
@@ -115,14 +113,14 @@ function checkScore() {
       <th>Marks</th>
     </tr>`;
 
-  sectionElements.forEach(secEl => {
-    const secName = secEl.innerText.trim();
+  sectionSpans.forEach(secEl => {
+    const secName = secEl.textContent.trim();
     let stats = { total:0, right:0, wrong:0, notAttempted:0, bonus:0, marks:0 };
 
-    // Collect questions until next section
+    // Collect all question-pnl divs under this section
     let questions = [];
     let sibling = secEl.nextElementSibling;
-    while(sibling && !/module|section|part/i.test(sibling.innerText)){
+    while(sibling && !(/module|section/i.test(sibling.textContent))){
       if (sibling.classList.contains("question-pnl")) questions.push(sibling);
       sibling = sibling.nextElementSibling;
     }
@@ -130,7 +128,7 @@ function checkScore() {
     questions.forEach(q => {
       stats.total++;
 
-      // Chosen option detection: strict using "Chosen Option :"
+      // --- Chosen Option ---
       let chosenOption = "--";
       try {
         const tds = q.querySelectorAll(".menu-tbl td");
@@ -144,15 +142,11 @@ function checkScore() {
 
       if(chosenOption === "--") stats.notAttempted++;
 
-      // Correct answer detection
+      // --- Correct Answer ---
       let correctOption = null;
       try {
         const correctTd = q.querySelector(".rightAns");
         if(correctTd) correctOption = correctTd.textContent.trim().split(".")[0];
-        else {
-          const imgTick = q.querySelector("img[src*='tick']");
-          if(imgTick) correctOption = imgTick.parentElement.textContent.trim().split(".")[0];
-        }
       } catch(e){}
 
       if(correctOption == null){
