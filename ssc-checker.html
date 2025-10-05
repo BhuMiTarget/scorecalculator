@@ -2,31 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SSC Answer Key Score Checker</title>
+<title>SSC Multi-Section Score Checker</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-  h1 { text-align: center; color: #333; }
-  input, button { padding: 8px; margin: 5px; }
-  table { border-collapse: collapse; margin: 20px auto; width: 95%; max-width: 800px; background: #fff; display:block; overflow-x:auto; }
-  th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-  th { background: #2c7be5; color: #fff; }
-  tr:nth-child(even) { background: #f9f9f9; }
-  #result { margin-top: 20px; }
+body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+h1 { text-align: center; color: #333; }
+input, button { padding: 8px; margin: 5px; }
+table { border-collapse: collapse; margin: 20px auto; width: 95%; max-width: 800px; background: #fff; display:block; overflow-x:auto; }
+th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+th { background: #2c7be5; color: #fff; }
+tr:nth-child(even) { background: #f9f9f9; }
+#result { margin-top: 20px; }
 </style>
 </head>
 <body>
-<h1>SSC Answer Key Score Checker</h1>
+<h1>SSC Multi-Section Score Checker</h1>
 
 <div style="text-align:center;">
-  <p><strong>Option 1: Load from URL (requires CORS)</strong></p>
-  <input type="text" id="urlInput" size="80" placeholder="Paste SSC answer key URL here">
-  <button onclick="loadHTML()">Load URL</button>
-  <br><br>
-  <p><strong>Option 2: Upload HTML file (always works)</strong></p>
   <input type="file" id="fileInput" accept=".html">
   <button onclick="loadFile()">Load File</button>
-  <br><br>
   <button onclick="checkScore()" id="checkBtn" disabled>Check Score</button>
 </div>
 
@@ -35,27 +29,6 @@
 <script>
 let loadedDoc = null;
 
-// --- Step 1: Load URL ---
-async function loadHTML() {
-  const url = document.getElementById("urlInput").value.trim();
-  if (!url) { alert("Please enter a valid URL."); return; }
-
-  try {
-    const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-    const data = await response.json();
-    const htmlText = data.contents;
-
-    const parser = new DOMParser();
-    loadedDoc = parser.parseFromString(htmlText, "text/html");
-
-    alert("Page loaded successfully! Click 'Check Score' to calculate your score.");
-    document.getElementById("checkBtn").disabled = false;
-  } catch (err) {
-    alert("Error loading page. Likely due to CORS restrictions: " + err);
-  }
-}
-
-// --- Step 1b: Load File ---
 function loadFile() {
   const fileInput = document.getElementById('fileInput');
   if (!fileInput.files.length) { alert('Please select an HTML file.'); return; }
@@ -75,9 +48,14 @@ function loadFile() {
   reader.readAsText(file);
 }
 
-// --- Step 2: Check score ---
 function checkScore() {
-  if (!loadedDoc) { alert("No page loaded yet."); return; }
+  if (!loadedDoc) { alert("No file loaded yet."); return; }
+
+  // Find all section labels and question panels in order
+  const container = loadedDoc.body;
+  const children = Array.from(container.querySelectorAll(".section-lbl, .question-pnl"));
+  
+  if (!children.length) { alert("No sections or questions found!"); return; }
 
   let grandTotal = 0;
   let output = `<table>
@@ -92,60 +70,69 @@ function checkScore() {
       <th>Marks</th>
     </tr>`;
 
-  const sections = loadedDoc.querySelectorAll(".section-cntnr");
-  if (!sections.length) {
-    alert("No sections found! Check your file/URL format and selectors.");
-    return;
-  }
+  let currentSection = "General";
+  let sectionStats = {};
 
-  sections.forEach(section => {
-    const secName = section.querySelector(".section-lbl")?.innerText.trim() || "Unnamed Section";
-    const questions = section.querySelectorAll(".question-pnl");
+  children.forEach(el => {
+    if (el.classList.contains("section-lbl")) {
+      currentSection = el.innerText.trim();
+      if (!sectionStats[currentSection]) {
+        sectionStats[currentSection] = { total: 0, right: 0, wrong: 0, notAttempted: 0, bonus: 0, marks: 0 };
+      }
+    }
+    else if (el.classList.contains("question-pnl")) {
+      if (!sectionStats[currentSection]) sectionStats[currentSection] = { total: 0, right: 0, wrong: 0, notAttempted: 0, bonus: 0, marks: 0 };
+      const stats = sectionStats[currentSection];
+      stats.total++;
 
-    let right = 0, wrong = 0, notAttempted = 0, bonus = 0, totalMarks = 0;
-
-    questions.forEach(q => {
-      let chosenText = "";
+      // Chosen option
+      let chosenOption = "--";
       try {
-        const chosenCells = q.querySelectorAll(".menu-tbl td.bold");
-        chosenText = chosenCells[chosenCells.length - 1]?.textContent.trim() || "--";
-      } catch (e) { chosenText = "--"; }
+        const tds = el.querySelectorAll(".menu-tbl td.bold");
+        tds.forEach((td,i)=>{
+          if(tds[i-1]?.textContent.trim()==="Chosen Option :") chosenOption = td.textContent.trim();
+        });
+      } catch(e){}
 
-      if (chosenText === "--") notAttempted++;
+      if(chosenOption === "--") stats.notAttempted++;
 
+      // Correct answer
       let correctOption = null;
       try {
-        const correctTd = q.querySelector(".rightAns");
-        if (correctTd) correctOption = correctTd.textContent.trim().split(".")[0];
-      } catch (e) {}
+        const correctTd = el.querySelector(".rightAns");
+        if(correctTd) correctOption = correctTd.textContent.trim().split(".")[0];
+      } catch(e){}
 
-      if (correctOption == null) {
-        bonus++;
-        totalMarks += 2;
-      } else if (chosenText === "--") {
+      if(correctOption==null){
+        stats.bonus++;
+        stats.marks += 2;
+      } else if(chosenOption === "--") {
         // no marks
-      } else if (chosenText === correctOption) {
-        right++;
-        totalMarks += 2;
+      } else if(chosenOption === correctOption) {
+        stats.right++;
+        stats.marks += 2;
       } else {
-        wrong++;
-        totalMarks -= 0.5;
+        stats.wrong++;
+        stats.marks -= 0.5;
       }
-    });
-
-    grandTotal += totalMarks;
-
-    output += `<tr>
-      <td>${secName}</td>
-      <td>${questions.length}</td>
-      <td>${questions.length - notAttempted}</td>
-      <td>${right}</td>
-      <td>${wrong}</td>
-      <td>${notAttempted}</td>
-      <td>${bonus}</td>
-      <td style="color:${totalMarks < 0 ? 'red':'black'}">${totalMarks.toFixed(2)}</td>
-    </tr>`;
+      grandTotal += stats.marks; // update grand total cumulatively
+    }
   });
+
+  // Build table output
+  for (let sec in sectionStats) {
+    const s = sectionStats[sec];
+    output += `<tr>
+      <td>${sec}</td>
+      <td>${s.total}</td>
+      <td>${s.total - s.notAttempted}</td>
+      <td>${s.right}</td>
+      <td>${s.wrong}</td>
+      <td>${s.notAttempted}</td>
+      <td>${s.bonus}</td>
+      <td style="color:${s.marks<0?'red':'black'}">${s.marks.toFixed(2)}</td>
+    </tr>`;
+  }
 
   output += `<tr style="font-weight:bold; background:#e7f5fe;">
       <td colspan="7">Grand Total</td>
